@@ -30,7 +30,8 @@ bool CPlayer::m_bClearedAlive = true;
 //------------------------------------------------------------------------------
 //マクロ
 //------------------------------------------------------------------------------
-
+#define CHIANTHUNDER_FLIGHT_TIME (50)		//連鎖爆発時の無重力時間
+#define BUFFERED_INPUT_TIME (5)				//先行入力の猶予フレーム
 //------------------------------------------------------------------------------
 //コンストラクタ
 //------------------------------------------------------------------------------
@@ -38,6 +39,8 @@ CPlayer::CPlayer()
 {
 	m_nCntChainThunder = 0;
 	m_bChainThunder = false;
+	m_AttackInput = CPlayer::ATTACK_INPUT::INPUT_NONE;
+	m_nCntAttackInput = 0;
 }
 
 //------------------------------------------------------------------------------
@@ -228,6 +231,7 @@ void CPlayer::DeathAction()
 void CPlayer::SetState(STATE nextstate)
 {
 	CCharacter::SetState(nextstate);
+
 	switch (nextstate)
 	{
 	case CCharacter::STATE_NORMAL:
@@ -252,7 +256,7 @@ void CPlayer::SetState(STATE nextstate)
 void CPlayer::StartChainThunder()
 {
 	//無重力設定
-	SetGravity(false, 50);
+	SetGravity(false, CHIANTHUNDER_FLIGHT_TIME);
 
 	//移動量を全部消す
 	GetMove() = ZeroVector3;
@@ -361,13 +365,47 @@ std::shared_ptr<CPlayer> CPlayer::Create(D3DXVECTOR3 pos)
 	//生成した情報
 	return nullptr;
 }
+//------------------------------------------------------------------------------
+//アクションの入力
+//------------------------------------------------------------------------------
+void CPlayer::ActionInput()
+{
+
+	//カウントダウンして0以下になった時
+	if (m_nCntAttackInput-- <= 0)
+	{
+		//入力解除
+		m_AttackInput = ATTACK_INPUT::INPUT_NONE;
+	}
+
+	//B押したとき
+	if (CHossoLibrary::CheckAttack_B(CHossoLibrary::INPUTTYPE::TRIGGER))
+	{
+		m_AttackInput = ATTACK_INPUT::INPUT_B;
+		m_nCntAttackInput = BUFFERED_INPUT_TIME;
+	}
+	//X押したとき
+	else if(CHossoLibrary::CheckAttack_X(CHossoLibrary::INPUTTYPE::TRIGGER))
+	{
+		m_AttackInput = ATTACK_INPUT::INPUT_X;
+		m_nCntAttackInput = BUFFERED_INPUT_TIME;
+	}
+	//Y押したとき
+	else if (CHossoLibrary::CheckAttack_Y(CHossoLibrary::INPUTTYPE::TRIGGER))
+	{
+		m_AttackInput = ATTACK_INPUT::INPUT_Y;
+		m_nCntAttackInput = BUFFERED_INPUT_TIME;
+	}
+}
 
 //------------------------------------------------------------------------------
 //移動の入力
 //------------------------------------------------------------------------------
 void CPlayer::MoveInput()
 {
-	D3DXVECTOR3 &rMove = GetMove();		//移動情報取得
+	//変数宣言
+	//参照渡し
+	D3DXVECTOR3 &rMove = GetMove();			//移動情報取得
 	D3DXVECTOR3 &rRotdest = GetRotDest();	//回転情報取得
 
 	if (!GetAttack())
@@ -377,7 +415,7 @@ void CPlayer::MoveInput()
 
 		//ダッシュしているか確認
 		CHossoLibrary::CheckDash(CHossoLibrary::PRESS) ?
-			fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetDashSpeed() :		//歩く速度
+			fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetDashSpeed() :			//歩く速度
 			fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetMoveSpeed();			//ダッシュ速度
 
 		//ジャンプ状態の場合
@@ -466,8 +504,6 @@ void CPlayer::MoveInput()
 				rRotdest.y = fCameraRot;
 			}
 		}
-		//回転処理
-		CCharacter::SetRotDest(rRotdest);
 	}
 
 	//ジャンプキー
@@ -490,8 +526,12 @@ void CPlayer::MoveInput()
 			CManager::GetSound()->Play(CSound::LABEL_SE_JUMP);
 		}
 	}
+
+	//攻撃の入力処理
+	ActionInput();
+
 	//攻撃の入力
-	if (AttackInput())
+	if (Attack())
 	{
 		//回転
 		AttackTurning();
@@ -570,51 +610,40 @@ void CPlayer::ChainThunder()
 	}
 }
 
-
 //------------------------------------------------------------------------------
 //連続攻撃の次のモーションどれだ
 //------------------------------------------------------------------------------
-bool CPlayer::AttackInput()
+bool CPlayer::Attack()
 {
-	bool bAttack = false;
-	CMotion::MOTION_TYPE NowMotion = GetNowMotion();
+	bool bAttack = false;	//return用
+	CMotion::MOTION_TYPE NowMotion = GetNowMotion();		//現在のモーション取得
 
-	//現在のモーションに応じて次の動きを決める
+	//現在のモーションに応じて次のモーションを決める
 	switch (NowMotion)
 	{
-		//地面に足がついているとき
 	case CMotion::PLAYER_NEUTRAL:
 	case CMotion::PLAYER_WALK:
 	case CMotion::PLAYER_DASH:
-
-		//Xボタン
-		if (CHossoLibrary::CheckAttack_X(CHossoLibrary::TRIGGER))
+		if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_X)
 		{
 			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_01);
 			return true;
 		}
-
-		//Yボタン
-		if (CHossoLibrary::CheckAttack_Y(CHossoLibrary::TRIGGER))
+		if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_Y)
 		{
 			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_01);
 			return true;
 		}
-
-		//Bボタン
-		if (CHossoLibrary::CheckAttack_B(CHossoLibrary::TRIGGER))
+		if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_B)
 		{
+			ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
 			StartChainThunder();
 			return true;
 		}
 		break;
-
-		//空中にいる時
 	case CMotion::PLAYER_AIR_NEUTRAL:
 	case CMotion::PLAYER_JUMP:
-
-		//Xボタン
-		if (CHossoLibrary::CheckAttack_X(CHossoLibrary::TRIGGER))
+		if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_X)
 		{
 			if (!GetAirAttack())
 			{
@@ -625,21 +654,18 @@ bool CPlayer::AttackInput()
 				return true;
 			}
 		}
-
-		//Yボタン
-		if (CHossoLibrary::CheckAttack_Y(CHossoLibrary::TRIGGER))
+		if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_Y)
 		{
 			ChangeMotion(CMotion::PLAYER_ATTACK_SLAMS);
 			GetMove().y = 0.0f;
 			SetGravity(false, 5);
 			return true;
 		}
-
-		//Bボタン
-		if (CHossoLibrary::CheckAttack_B(CHossoLibrary::TRIGGER))
+		if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_B)
 		{
 			if (!GetAirAttack())
 			{
+				ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
 				StartChainThunder();
 				SetAirAttack(true);
 				return true;
@@ -654,12 +680,12 @@ bool CPlayer::AttackInput()
 		return false;
 	}
 
-	//Xボタン
-	if (CHossoLibrary::CheckAttack_X(CHossoLibrary::TRIGGER))
+
+	if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_X)
 	{
 		switch (NowMotion)
 		{
-			//地上攻撃の時
+
 		case CMotion::PLAYER_LAND_ATTACK_X_01:
 			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_02);
 			bAttack = true;
@@ -680,7 +706,7 @@ bool CPlayer::AttackInput()
 			bAttack = true;
 			break;
 
-			//空中攻撃の時
+			//空中
 		case CMotion::PLAYER_AIR_ATTACK_X_01:
 			ChangeMotion(CMotion::PLAYER_AIR_ATTACK_X_02);
 			SetGravity(false, 17);
@@ -702,10 +728,9 @@ bool CPlayer::AttackInput()
 		}
 	}
 
-	//Yボタン
-	if (CHossoLibrary::CheckAttack_Y(CHossoLibrary::TRIGGER))
+	if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_Y)
 	{
-		//Xボタンの進行具合で切り替える
+
 		switch (NowMotion)
 		{
 		case CMotion::PLAYER_LAND_ATTACK_X_03:
@@ -742,10 +767,9 @@ bool CPlayer::AttackInput()
 		}
 	}
 
-	//Yボタン
-	if (CHossoLibrary::CheckAttack_Y(CHossoLibrary::TRIGGER))
+
+	if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_Y)
 	{
-		//空中攻撃の間
 		switch (NowMotion)
 		{
 		case CMotion::PLAYER_AIR_ATTACK_X_01:
@@ -757,14 +781,12 @@ bool CPlayer::AttackInput()
 			break;
 		}
 	}
-
-	//Bボタン
-	if (CHossoLibrary::CheckAttack_B(CHossoLibrary::TRIGGER))
+	if (m_AttackInput == CPlayer::ATTACK_INPUT::INPUT_B)
 	{
 		switch (NowMotion)
 		{
-			//どの攻撃からもつながるように
 		case CMotion::MOTION_NONE:
+			break;
 		case CMotion::PLAYER_LAND_ATTACK_X_01:
 		case CMotion::PLAYER_LAND_ATTACK_X_02:
 		case CMotion::PLAYER_LAND_ATTACK_X_03:
@@ -783,6 +805,7 @@ bool CPlayer::AttackInput()
 		case CMotion::PLAYER_AIR_ATTACK_X_02:
 		case CMotion::PLAYER_AIR_ATTACK_X_03:
 		case CMotion::PLAYER_AIR_ATTACK_X_04:
+			ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
 			StartChainThunder();
 			SetAirAttack(true);
 			bAttack = true;

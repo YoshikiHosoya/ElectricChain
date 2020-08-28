@@ -26,13 +26,12 @@
 //------------------------------------------------------------------------------
 //マクロ
 //------------------------------------------------------------------------------
-
+#define TARGET_LENGTH (200.0f)
 //------------------------------------------------------------------------------
 //コンストラクタ
 //------------------------------------------------------------------------------
 CPlayer_Demo::CPlayer_Demo()
 {
-	m_AttackInput = CPlayer_Demo::ATTACK_NONE;
 }
 
 //------------------------------------------------------------------------------
@@ -158,22 +157,25 @@ std::shared_ptr<CPlayer_Demo> CPlayer_Demo::Create(D3DXVECTOR3 pos)
 //------------------------------------------------------------------------------
 void CPlayer_Demo::MoveAI()
 {
-	D3DXVECTOR3 &rMove = GetMove();		//移動情報取得
+	D3DXVECTOR3 &rMove = GetMove();			//移動情報取得
 	D3DXVECTOR3 &rRotdest = GetRotDest();	//回転情報取得
 	D3DXVECTOR3 posDif = ZeroVector3;
 	float fAngle = 0.0f;
 	float fLength = 0.0f;
 
-	//とりあえず敵の情報取得
+	//敵の情報が入ってるかどうか
 	if (m_pTargetEnemy._Get())
 	{
+		//現在ターゲット中の敵がスタン中のとき
 		if (m_pTargetEnemy._Get()->GetStan())
 		{
+			//ターゲッティング
 			SetTargetEnemy();
 		}
 	}
 	else
 	{
+		//ターゲッティング
 		SetTargetEnemy();
 	}
 
@@ -190,6 +192,7 @@ void CPlayer_Demo::MoveAI()
 		return;
 	}
 
+	//敵が全てスタンしてまだ連鎖爆発してない時
 	if (CEnemy::GetEnemyNum() == CEnemy::GetStanEnemyNum() && !GetChainThunder())
 	{
 		ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
@@ -198,54 +201,33 @@ void CPlayer_Demo::MoveAI()
 		m_pTargetEnemy.reset();
 	}
 
+	//攻撃してない時
 	if (!GetAttack())
 	{
 		//移動速度
 		float fMoveSpeed;
 
-		//ダッシュしているか確認
-		fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetDashSpeed();		//基本ダッシュで
-
-		//ジャンプ状態の場合
-		if (GetJump())
-		{
-			fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetAirSpeeed();			//空中の移動速度
-		}
-
-		//カメラ回転情報取得
-		float fCameraRot = CManager::GetRenderer()->GetCamera()->GetCameraRot().y;
+		//移動速度設定
+		//ジャンプ状態の時は空中の移動速度
+		//それ以外の場合はダッシュの移動速度
+		fMoveSpeed = GetJump() ?
+			fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetAirSpeeed():
+			fMoveSpeed = GetDefaultParam(CCharacter::GetParamType())->GetDashSpeed();
 
 		//移動
+		//敵の方角 * 移動速度
 		rMove.x += sinf(fAngle) * fMoveSpeed;
 		rMove.z += cosf(fAngle) * fMoveSpeed;
 
+		//体の回転の向き設定
 		rRotdest.y = D3DX_PI + fAngle;
 
+		//3.14の範囲に抑える
 		CHossoLibrary::CalcRotation(rRotdest.y);
-
-		//回転処理
-		CCharacter::SetRotDest(rRotdest);
-	}
-
-	//ジャンプキー
-	if (CHossoLibrary::CheckJump(CHossoLibrary::TRIGGER))
-	{
-		if (!GetJump())
-		{
-			//移動情報取得
-			D3DXVECTOR3 &rMove = GetMove();
-
-			//上方向に進む
-			rMove.y = GetDefaultParam(CCharacter::GetParamType())->GetJumpSpeed();
-
-			//ジャンプに切り替え
-			SetJump(true);
-			ChangeMotion(CMotion::PLAYER_JUMP);
-		}
 	}
 
 	//ターゲットの敵との距離が一定以下になった時
-	if (fLength < 200.0f)
+	if (fLength < TARGET_LENGTH)
 	{
 		//乱数
 		int nAttackRand = rand() % 5;
@@ -253,227 +235,22 @@ void CPlayer_Demo::MoveAI()
 		if (nAttackRand <= 3)
 		{
 			//Xの入力
-			m_AttackInput = CPlayer_Demo::ATTACK_X;
+			GetAttackInptut() = CPlayer::ATTACK_INPUT::INPUT_X;
 		}
 		else
 		{
 			//Yの入力
-			m_AttackInput = CPlayer_Demo::ATTACK_Y;
+			GetAttackInptut() = CPlayer::ATTACK_INPUT::INPUT_Y;
 		}
 
 		//攻撃の入力
-		if (AttackInput())
+		if (Attack())
 		{
 			//回転
 			rRotdest.y = fAngle + D3DX_PI;
 			SetAttack(true);
 		}
 	}
-}
-//------------------------------------------------------------------------------
-//連続攻撃の次のモーションどれだ
-//------------------------------------------------------------------------------
-bool CPlayer_Demo::AttackInput()
-{
-	bool bAttack = false;	//return用
-	CMotion::MOTION_TYPE NowMotion = GetNowMotion();		//現在のモーション取得
-
-	//現在のモーションに応じて次のモーションを決める
-	switch (NowMotion)
-	{
-	case CMotion::PLAYER_NEUTRAL:
-	case CMotion::PLAYER_WALK:
-	case CMotion::PLAYER_DASH:
-		if (m_AttackInput == CPlayer_Demo::ATTACK_X)
-		{
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_01);
-			return true;
-		}
-		if (m_AttackInput == CPlayer_Demo::ATTACK_Y)
-		{
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_01);
-			return true;
-		}
-		if (m_AttackInput == CPlayer_Demo::ATTACK_B)
-		{
-			ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
-			StartChainThunder();
-			return true;
-		}
-		break;
-	case CMotion::PLAYER_AIR_NEUTRAL:
-	case CMotion::PLAYER_JUMP:
-		if (m_AttackInput == CPlayer_Demo::ATTACK_X)
-		{
-			if (!GetAirAttack())
-			{
-				ChangeMotion(CMotion::PLAYER_AIR_ATTACK_X_01);
-				SetAirAttack(true);
-				SetGravity(false, 17);
-
-				return true;
-			}
-		}
-		if (m_AttackInput == CPlayer_Demo::ATTACK_Y)
-		{
-			ChangeMotion(CMotion::PLAYER_ATTACK_SLAMS);
-			GetMove().y = 0.0f;
-			SetGravity(false, 5);
-			return true;
-		}
-		if (m_AttackInput == CPlayer_Demo::ATTACK_B)
-		{
-			if (!GetAirAttack())
-			{
-				ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
-				StartChainThunder();
-				SetAirAttack(true);
-				return true;
-			}
-		}
-		break;
-	}
-
-	//続けて攻撃できる状態か確認
-	if (!ContinueAttack())
-	{
-		return false;
-	}
-
-
-	if (m_AttackInput == CPlayer_Demo::ATTACK_X)
-	{
-		switch (NowMotion)
-		{
-
-		case CMotion::PLAYER_LAND_ATTACK_X_01:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_02);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_X_02:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_03);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_X_03:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_04);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_X_04:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_X_05);
-			bAttack = true;
-			break;
-
-			//空中
-		case CMotion::PLAYER_AIR_ATTACK_X_01:
-			ChangeMotion(CMotion::PLAYER_AIR_ATTACK_X_02);
-			SetGravity(false, 17);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_AIR_ATTACK_X_02:
-			ChangeMotion(CMotion::PLAYER_AIR_ATTACK_X_03);
-			SetGravity(false, 17);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_AIR_ATTACK_X_03:
-			ChangeMotion(CMotion::PLAYER_AIR_ATTACK_X_04);
-			SetGravity(false, 30);
-			bAttack = true;
-			break;
-
-		}
-	}
-
-	if (m_AttackInput == CPlayer_Demo::ATTACK_Y)
-	{
-
-		switch (NowMotion)
-		{
-		case CMotion::PLAYER_LAND_ATTACK_X_03:
-		case CMotion::PLAYER_LAND_ATTACK_X_04:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_02);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_Y_01:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_SPEAR);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_Y_02:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_03);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_Y_03:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_04);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_Y_04:
-			ChangeMotion(CMotion::PLAYER_LAND_ATTACK_Y_05);
-			bAttack = true;
-			break;
-
-		case CMotion::PLAYER_LAND_ATTACK_X_01:
-		case CMotion::PLAYER_LAND_ATTACK_X_02:
-			ChangeMotion(CMotion::PLAYER_ATTACK_UPPER);
-			SetAirAttack(true);
-			break;
-		}
-	}
-
-
-	if (m_AttackInput == CPlayer_Demo::ATTACK_Y)
-	{
-		switch (NowMotion)
-		{
-		case CMotion::PLAYER_AIR_ATTACK_X_01:
-		case CMotion::PLAYER_AIR_ATTACK_X_02:
-		case CMotion::PLAYER_AIR_ATTACK_X_03:
-		case CMotion::PLAYER_AIR_ATTACK_X_04:
-			ChangeMotion(CMotion::PLAYER_ATTACK_SLAMS);
-			bAttack = true;
-			break;
-		}
-	}
-	if (m_AttackInput == CPlayer_Demo::ATTACK_B)
-	{
-		switch (NowMotion)
-		{
-		case CMotion::MOTION_NONE:
-			break;
-		case CMotion::PLAYER_LAND_ATTACK_X_01:
-		case CMotion::PLAYER_LAND_ATTACK_X_02:
-		case CMotion::PLAYER_LAND_ATTACK_X_03:
-		case CMotion::PLAYER_LAND_ATTACK_X_04:
-		case CMotion::PLAYER_LAND_ATTACK_X_05:
-		case CMotion::PLAYER_LAND_ATTACK_Y_01:
-		case CMotion::PLAYER_LAND_ATTACK_Y_02:
-		case CMotion::PLAYER_LAND_ATTACK_Y_03:
-		case CMotion::PLAYER_LAND_ATTACK_Y_04:
-		case CMotion::PLAYER_LAND_ATTACK_Y_05:
-		case CMotion::PLAYER_LAND_ATTACK_Y_SPEAR:
-		case CMotion::PLAYER_JUMP:
-		case CMotion::PLAYER_ATTACK_UPPER:
-		case CMotion::PLAYER_ATTACK_SLAMS:
-		case CMotion::PLAYER_AIR_ATTACK_X_01:
-		case CMotion::PLAYER_AIR_ATTACK_X_02:
-		case CMotion::PLAYER_AIR_ATTACK_X_03:
-		case CMotion::PLAYER_AIR_ATTACK_X_04:
-			ChangeMotion(CMotion::PLAYER_ATTACK_THUNDER);
-			StartChainThunder();
-			SetAirAttack(true);
-			bAttack = true;
-			break;
-
-		}
-	}
-	return bAttack;
 }
 
 //------------------------------------------------------------------------------

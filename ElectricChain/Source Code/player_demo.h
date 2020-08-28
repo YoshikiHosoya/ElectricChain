@@ -23,15 +23,6 @@ class CEnemy;
 class CPlayer_Demo : public CPlayer
 {
 public:
-	//攻撃の入力
-	enum ATTACK_INPUT
-	{
-		ATTACK_NONE,	//攻撃してない
-		ATTACK_X,		//Xボタン
-		ATTACK_Y,		//Yボタン
-		ATTACK_B,		//Bボタン
-		ATTACK_MAX
-	};
 
 	CPlayer_Demo();													//コンストラクタ
 	~CPlayer_Demo();												//デストラクタ
@@ -44,9 +35,7 @@ public:
 	static std::shared_ptr<CPlayer_Demo> Create(D3DXVECTOR3 pos);	//生成
 
 private:
-	ATTACK_INPUT m_AttackInput;										//攻撃の入力
 	void MoveAI();													//移動の入力
-	bool AttackInput();												//攻撃の入力処理
 	void SetTargetEnemy();											//ターゲットの敵設定
 
 	std::weak_ptr<CEnemy> m_pTargetEnemy;							//ターゲットの敵のポインタ

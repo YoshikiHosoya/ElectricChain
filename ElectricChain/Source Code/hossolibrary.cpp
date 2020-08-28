@@ -126,7 +126,7 @@ bool CHossoLibrary::CheckAttack_X(INPUTTYPE type)
 		}
 		break;
 	case CHossoLibrary::TRIGGER:
-		if (m_pKeyboard->GetTrigger(DIK_X) || m_pXInput->GetTrigger(CPad_XInput::JOYPADKEY_X, 5))
+		if (m_pKeyboard->GetTrigger(DIK_X) || m_pXInput->GetTrigger(CPad_XInput::JOYPADKEY_X, 1))
 		{
 
 			return true;
@@ -149,7 +149,7 @@ bool CHossoLibrary::CheckAttack_Y(INPUTTYPE type)
 		}
 		break;
 	case CHossoLibrary::TRIGGER:
-		if (m_pKeyboard->GetTrigger(DIK_C) || m_pXInput->GetTrigger(CPad_XInput::JOYPADKEY_Y, 5))
+		if (m_pKeyboard->GetTrigger(DIK_C) || m_pXInput->GetTrigger(CPad_XInput::JOYPADKEY_Y, 1))
 		{
 			return true;
 		}

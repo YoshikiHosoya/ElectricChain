@@ -24,6 +24,16 @@ class CGauge_2D;
 class CPlayer : public CCharacter
 {
 public:
+	//ボタンの入力
+	//先行入力用
+	enum class ATTACK_INPUT
+	{
+		INPUT_NONE,			//入力無し
+		INPUT_X,			//Xボタン
+		INPUT_Y,			//Yボタン
+		INPUT_B,			//Bボタン
+	};
+
 	CPlayer();															//コンストラクタ
 	~CPlayer();															//デストラクタ
 
@@ -40,21 +50,26 @@ public:
 	static std::shared_ptr<CPlayer> Create(D3DXVECTOR3 pos);			//生成
 
 	void SetChainThunder(bool bChain) { m_bChainThunder = bChain; };	//雷発発生状態設定
-	bool GetChainThunder() { return m_bChainThunder; };					//雷発生状態か取得
+	void SetAttackInput(ATTACK_INPUT input) { m_AttackInput = input; };	//入力の設定
 
+	bool GetChainThunder() { return m_bChainThunder; };					//雷発生状態か取得
+	ATTACK_INPUT &GetAttackInptut() { return m_AttackInput; };			//入力の取得
 
 protected:
 	void ChainThunder();												//連鎖
 	void MoveMotionCheck();												//移動系のモーションチェック
+	bool Attack();													//攻撃の入力処理
 
 private:
 	static bool m_bClearedAlive;										//ゲームクリア時に生きていたか
+	ATTACK_INPUT m_AttackInput;											//攻撃の入力
+	int m_nCntAttackInput;												//攻撃の入力の経過時間
 	bool m_bChainThunder;												//連鎖雷状態
 	int m_nCntChainThunder;												//連鎖雷の経過時間
 	std::shared_ptr<CGauge_2D> m_pGauge;								//ゲージのポインタ
 
+	void ActionInput();													//入力処理
 	void MoveInput();													//移動の入力
-	bool AttackInput();													//攻撃の入力処理
 private:
 };
 #endif
